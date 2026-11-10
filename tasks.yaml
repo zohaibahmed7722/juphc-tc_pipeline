@@ -32,3 +32,51 @@ spec:
           # Delete files and directories starting with .. plus any other character
           rm -rf "${WORKSPACE_SOURCE_PATH}"/..?*
         fi
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: tests
+spec:
+  description: This task will run automated unit tests for the Node.js application.
+  workspaces:
+    - name: source
+  params:
+    - name: ARGS
+      type: string
+      default: "test"
+      description: The npm script to run
+  steps:
+    - name: test
+      image: node:18-alpine
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/usr/bin/env sh
+        set -eu
+        echo "Installing dependencies..."
+        npm ci || npm install
+        echo "Running automated unit tests..."
+        npm run $(params.ARGS)
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: deploy
+spec:
+  description: This task deploys application manifests to the cluster using kubectl.
+  workspaces:
+    - name: source
+  params:
+    - name: MANIFEST_DIR
+      type: string
+      default: "deploy"
+      description: Directory containing Kubernetes manifests to apply
+  steps:
+    - name: apply-manifests
+      image: bitnami/kubectl:latest
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/usr/bin/env sh
+        set -eu
+        echo "Applying manifests from $(params.MANIFEST_DIR)..."
+        kubectl apply -f $(params.MANIFEST_DIR)

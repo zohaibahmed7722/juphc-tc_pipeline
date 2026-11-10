@@ -27,10 +27,51 @@ spec:
       taskRef:
         name: git-clone
         kind: ClusterTask
+        apiVersion: tekton.dev/v1beta1
       params:
-      - name: url
-        value: $(params.repo-url)
-      - name: revision
-        value: $(params.branch)
+        - name: url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.branch)
       runAfter:
         - init
+
+    - name: test
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+      taskRef:
+        name: tests
+      runAfter:
+        - clone
+
+    - name: build
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+        - name: dockerconfig
+          workspace: dockerconfig-ws
+      taskRef:
+        name: buildah
+        kind: ClusterTask
+        apiVersion: tekton.dev/v1beta1
+      params:
+        - name: IMAGE
+          value: $(params.build-image)
+      runAfter:
+        - test
+
+    - name: deploy
+      workspaces:
+        - name: manifest-dir
+          workspace: pipeline-workspace
+      taskRef:
+        name: openshift-client
+        kind: ClusterTask
+        apiVersion: tekton.dev/v1beta1
+      params:
+        - name: SCRIPT
+          value: |
+            oc apply -f deploy/deployment.yaml || kubectl apply -f deploy/deployment.yaml
+      runAfter:
+        - build
