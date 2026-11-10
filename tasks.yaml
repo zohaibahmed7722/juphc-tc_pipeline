@@ -20,63 +20,49 @@ spec:
         #!/usr/bin/env sh
         set -eu
         echo "Removing all files from ${WORKSPACE_SOURCE_PATH} ..."
-        # Delete any existing contents of the directory if it exists.
-        #
-        # We don't just "rm -rf ${WORKSPACE_SOURCE_PATH}" because ${WORKSPACE_SOURCE_PATH} might be "/"
-        # or the root of a mounted volume.
         if [ -d "${WORKSPACE_SOURCE_PATH}" ] ; then
-          # Delete non-hidden files and directories
           rm -rf "${WORKSPACE_SOURCE_PATH:?}"/*
-          # Delete files and directories starting with . but excluding ..
           rm -rf "${WORKSPACE_SOURCE_PATH}"/.[!.]*
-          # Delete files and directories starting with .. plus any other character
           rm -rf "${WORKSPACE_SOURCE_PATH}"/..?*
         fi
 ---
 apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
-  name: tests
+  name: npm
 spec:
-  description: This task will run automated unit tests for the Node.js application.
+  description: This task will run npm commands in the project workspace.
   workspaces:
     - name: source
   params:
     - name: ARGS
       type: string
-      default: "test"
-      description: The npm script to run
+      default: "install"
+      description: The npm command arguments to run
   steps:
-    - name: test
+    - name: npm-run
       image: node:18-alpine
       workingDir: $(workspaces.source.path)
       script: |
         #!/usr/bin/env sh
         set -eu
-        echo "Installing dependencies..."
-        npm ci || npm install
-        echo "Running automated unit tests..."
-        npm run $(params.ARGS)
+        echo "Executing npm $(params.ARGS)..."
+        npm $(params.ARGS)
 ---
 apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
-  name: deploy
+  name: jasmine
 spec:
-  description: This task deploys application manifests to the cluster using kubectl.
+  description: This task will run Jasmine unit tests in the project workspace.
   workspaces:
     - name: source
-  params:
-    - name: MANIFEST_DIR
-      type: string
-      default: "deploy"
-      description: Directory containing Kubernetes manifests to apply
   steps:
-    - name: apply-manifests
-      image: bitnami/kubectl:latest
+    - name: jasmine-test
+      image: node:18-alpine
       workingDir: $(workspaces.source.path)
       script: |
         #!/usr/bin/env sh
         set -eu
-        echo "Applying manifests from $(params.MANIFEST_DIR)..."
-        kubectl apply -f $(params.MANIFEST_DIR)
+        echo "Running Jasmine unit tests..."
+        npm test

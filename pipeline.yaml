@@ -36,14 +36,26 @@ spec:
       runAfter:
         - init
 
-    - name: test
+    - name: npminstall
       workspaces:
         - name: source
           workspace: pipeline-workspace
       taskRef:
-        name: tests
+        name: npm
+      params:
+        - name: ARGS
+          value: "install"
       runAfter:
         - clone
+
+    - name: tests
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+      taskRef:
+        name: jasmine
+      runAfter:
+        - npminstall
 
     - name: build
       workspaces:
@@ -59,19 +71,4 @@ spec:
         - name: IMAGE
           value: $(params.build-image)
       runAfter:
-        - test
-
-    - name: deploy
-      workspaces:
-        - name: manifest-dir
-          workspace: pipeline-workspace
-      taskRef:
-        name: openshift-client
-        kind: ClusterTask
-        apiVersion: tekton.dev/v1beta1
-      params:
-        - name: SCRIPT
-          value: |
-            oc apply -f deploy/deployment.yaml || kubectl apply -f deploy/deployment.yaml
-      runAfter:
-        - build
+        - tests
